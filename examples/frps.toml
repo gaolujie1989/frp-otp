@@ -1,0 +1,11 @@
+# frps v0.71.1. Replace the token with your own secret.
+bindPort = 7000
+auth.method = "token"
+auth.token = "REPLACE_WITH_A_RANDOM_FRP_TOKEN"
+
+# frps on the host; for another container use frp-otp:9000 on a private network.
+[[httpPlugins]]
+name = "frp-otp"
+addr = "127.0.0.1:9000"
+path = "/handler"
+ops = ["NewProxy", "NewUserConn"]
