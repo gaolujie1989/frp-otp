@@ -1,146 +1,71 @@
-// 基于 TOTP 的 FRP 访问授权验证
+// frp-otp grants temporary visitor access after TOTP verification.
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
-	"path/filepath"
+	"os/signal"
+	"syscall"
+
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
 )
 
-var appName string
-var buildRev string
-var buildDate string
-var buildVersion string
+var buildVersion = "dev"
+var buildRev = "unknown"
+var buildDate = "unknown"
 
-var entry = flag.String("e", "web", "工具启动入口")
-var proxy = flag.String("p", "", "代理通道名")
-var configFile = flag.String("c", "frp.otp.json", "OPT 配置文件")
-var showVer = flag.Bool("v", false, "显示应用版本信息并退出")
-var showHelp = flag.Bool("h", false, "显示应用帮助信息并退出")
-
-// LoadJSON 从文件加载 JSON 到变量
-func LoadJSON(file string, in interface{}) error {
-	var err error
-	var data []byte
-
-	if data, err = ioutil.ReadFile(file); nil == err {
-		err = json.Unmarshal(data, in)
-	}
-
-	return err
-}
-
-// SaveJSON 保存数据到 JSON 文件
-func SaveJSON(file string, in interface{}) error {
-	var bj, _ = json.Marshal(in)
-
-	return ioutil.WriteFile(file, bj, 0644)
-}
-
-// IsFile returns true if given path is a file,
-// or returns false when it's a directory or does not exist.
-func IsFile(filePath string) bool {
-	f, e := os.Stat(filePath)
-	if e != nil {
-		return false
-	}
-	return !f.IsDir()
-}
-
-// runWeb 运行 WEB 服务器
-func runWeb(cfg *Config) error {
-	var s, err = NewServer(cfg)
-	if nil == err {
-		err = s.Run()
-	}
-
-	return err
-}
-
-// genOtpKey 生成通道KEY
-func genOtpKey(cfg *Config, proxy string) error {
-	if c, ok := cfg.Channel[proxy]; ok {
-		fmt.Println("正在生成通道 " + proxy + " 的 OTP KEY")
-		c.GenerateOTP(proxy, cfg.Domain)
-	} else {
-		if "" == proxy {
-			fmt.Println("请输入要生成 OTP KEY 的通道，当前可用通道列表：")
-		} else {
-			fmt.Println("输入的通道 " + proxy + " 不存在，当前可用通道列表：")
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("frp-otp", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	entry := flags.String("e", "web", "entry point: web or key")
+	configFile := flags.String("c", "frp.otp.json", "configuration file")
+	version := flags.Bool("v", false, "show version")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
 		}
-
-		for k := range cfg.Channel {
-			fmt.Println(k)
-		}
+		return err
 	}
-
-	return nil
+	if flags.NArg() != 0 {
+		return fmt.Errorf("unexpected argument %q; use -e web or -e key", flags.Arg(0))
+	}
+	if *version {
+		_, err := fmt.Fprintf(stdout, "frp-otp %s (rev %s, built %s)\n", buildVersion, buildRev, buildDate)
+		return err
+	}
+	switch *entry {
+	case "key":
+		key, err := totp.Generate(totp.GenerateOpts{Period: 30, SecretSize: 32, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA512, Issuer: "frp-otp", AccountName: "access"})
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(stdout, "Secret: %s\nImport URI (keep private):\n%s\n", key.Secret(), key.String())
+		return err
+	case "web":
+		cfg, err := loadConfig(*configFile)
+		if err != nil {
+			return err
+		}
+		s, err := NewServer(cfg)
+		if err != nil {
+			return err
+		}
+		return s.Run(ctx)
+	default:
+		return fmt.Errorf("unknown entry %q; use web or key", *entry)
+	}
 }
 
 func main() {
-	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "使用说明: ", filepath.Base(os.Args[0]), " 参数选项")
-		fmt.Fprintln(os.Stderr, "欢迎使用 FRP 访问授权验证工具")
-		fmt.Fprintln(os.Stderr, "更多信息: http://github.com/csg800/frp-otp")
-		fmt.Fprintln(os.Stderr, "")
-
-		fmt.Fprintln(os.Stderr, "参数选项:")
-		flag.PrintDefaults()
-
-		if *showHelp {
-			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "启动入口：")
-			fmt.Fprintln(os.Stderr, "          web      启用访问授权验证服务")
-			fmt.Fprintln(os.Stderr, "          key      为通道生成访问授权KEY")
-		}
-	}
-
-	flag.Parse()
-
-	if *showVer {
-		fmt.Println(appName + " " + "Ver: " + buildVersion + " build: " + buildDate + " Rev:" + buildRev)
-		return
-	}
-
-	if *showHelp {
-		flag.Usage()
-		return
-	}
-
-	defer func() {
-		if err := recover(); nil != err {
-			fmt.Println("system error:", err)
-		}
-	}()
-
-	var err error
-	var cfg = new(Config)
-	if IsFile(*configFile) {
-		if err = LoadJSON(*configFile, cfg); nil == err {
-			if 0 == len(cfg.Channel) {
-				err = errors.New("配置文件中通道列表为空")
-			} else {
-				switch *entry {
-				case "web":
-					err = runWeb(cfg)
-				case "key":
-					err = genOtpKey(cfg, *proxy)
-				default:
-					flag.Usage()
-				}
-			}
-		} else {
-			err = errors.New("加载配置文件失败：" + err.Error())
-		}
-	} else {
-		err = errors.New("配置文件 " + *configFile + " 不存在")
-	}
-
-	if nil != err {
-		fmt.Println("错误：", err)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx, os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintln(os.Stderr, "frp-otp:", err)
+		os.Exit(1)
 	}
 }

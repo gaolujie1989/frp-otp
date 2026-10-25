@@ -1,0 +1,8 @@
+.git
+bin
+release
+.superpowers
+docs
+*.log
+*.test
+frp.otp.json

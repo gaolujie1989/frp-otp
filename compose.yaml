@@ -1,0 +1,13 @@
+services:
+  frp-otp:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - ./frp.otp.json:/etc/frp-otp.json:ro
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
