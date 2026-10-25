@@ -73,6 +73,26 @@ WAF/反代应覆盖或按标准追加真实连接来源地址，并限制回源�
 
 ## Docker
 
+已提供 GHCR 镜像（Linux amd64/arm64），可使用固定版本或 latest：
+
+```bash
+docker pull ghcr.io/gaolujie1989/frp-otp:v0.1.0
+docker run --rm ghcr.io/gaolujie1989/frp-otp:v0.1.0 -v
+```
+
+填好配置后启动：
+
+```bash
+docker run -d --name frp-otp --restart unless-stopped \
+  -p 127.0.0.1:9000:9000 \
+  -v "$(pwd)/frp.otp.json:/etc/frp-otp.json:ro" \
+  ghcr.io/gaolujie1989/frp-otp:v0.1.0
+```
+
+配置中的 BindAddress 需为 `0.0.0.0:9000`，密钥需先生成。配置文件需要能被容器 UID 65532 读取。镜像的版本标签对应同名 Git tag 的源代码，latest 指向最近发布的版本。
+
+### 本地构建
+
 先填好 `frp.otp.json` 的密钥，`BindAddress` 设置为 `0.0.0.0:9000`。配置文件需要能被容器 UID 65532 读取，避免给无关用户读取密钥的权限。
 
 ```bash
@@ -104,3 +124,5 @@ make vet
 `VERSION` 保存发布版本号（例如 `v0.1.0`）。更新它并提交到 main 后，Release 工作流会测试、构建六个平台压缩包、生成 SHA256SUMS，再发布 GitHub Release。也可手动运行 Release 工作流。已发布版本不可覆盖，重新发布应使用新版本号，并添加 `docs/releases/版本号.md` 发布说明。
 
 本地构建发布包：`./scripts/build-release.sh`。输出目录为 `release/版本号/`，打包时总是生成空密钥配置，不包含本地运行密钥。
+
+发布 Release 后会继续发布对应的 GHCR 镜像（`v版本号` 和 `latest`）。首次安装或修改 Docker 发布工作流时也会构建当前 VERSION 指定的已发布版本；也可手动运行 Publish Docker image 工作流。镜像始终从对应 Git tag 构建业务代码，并使用当前 Dockerfile 打包。

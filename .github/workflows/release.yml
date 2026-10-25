@@ -39,3 +39,10 @@ jobs:
             --notes-file "docs/releases/$version.md" \
             --draft
           gh release edit "$version" --draft=false --latest
+
+  docker:
+    needs: release
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker.yml
