@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.1.0 - 2026-10-25
 
 - Replace channel policies with a single five-minute global IP allowlist; deny visitors by default.
 - Trust X-Forwarded-For only from private/loopback immediate peers and resolve proxy chains right to left.

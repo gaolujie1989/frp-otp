@@ -4,6 +4,10 @@
 
 不需要域名，不内置 HTTPS，不分渠道，无账号管理、永久黑白名单、绕过模式或通知。授权存在内存中，重启后清空。授权到期不主动断开已有连接；同一个公网 IP 后的设备共享授权。私网访客也需要验证。
 
+## 可执行文件下载
+
+从 [Releases](https://github.com/gaolujie1989/frp-otp/releases) 下载对应系统和架构的压缩包。解压后运行 `./frp-otp -e key`，填写 `frp.otp.json` 的密钥，再运行 `./frp-otp -e web -c ./frp.otp.json`；Windows 使用 `frp-otp.exe`。下载包附带 `SHA256SUMS` 校验文件。
+
 ## 运行
 
 依赖：Go **1.27.3**；FRP **v0.71.1**；OTP 库 **v1.5.0**。
@@ -94,3 +98,9 @@ make vet
 ```
 
 本项目 fork 自 [csg2008/frp-otp](https://github.com/csg2008/frp-otp)，保留 Apache-2.0 许可证。
+
+## 发布维护
+
+`VERSION` 保存发布版本号（例如 `v0.1.0`）。更新它并提交到 main 后，Release 工作流会测试、构建六个平台压缩包、生成 SHA256SUMS，再发布 GitHub Release。也可手动运行 Release 工作流。已发布版本不可覆盖，重新发布应使用新版本号，并添加 `docs/releases/版本号.md` 发布说明。
+
+本地构建发布包：`./scripts/build-release.sh`。输出目录为 `release/版本号/`，打包时总是生成空密钥配置，不包含本地运行密钥。
