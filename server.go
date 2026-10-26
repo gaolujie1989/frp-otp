@@ -19,7 +19,6 @@ import (
 )
 
 const (
-	grantDuration = 5 * time.Minute
 	attemptWindow = time.Minute
 	maxFailures   = 5
 	maxTrackedIPs = 10000
@@ -89,7 +88,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-// Trusted peers may supply XFF; being a trusted peer never grants visitor access.
+// Trusted peers may supply XFF. Visitor access is configured separately by trust_networks.
 func trustedPeer(ip netip.Addr) bool {
 	ip = ip.Unmap()
 	return ip.IsPrivate() || ip.IsLoopback()
@@ -146,9 +145,15 @@ func (s *Server) cleanup(now time.Time) {
 }
 
 func (s *Server) isAllowed(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	for _, network := range s.cfg.trustNetworks {
+		if network.Contains(ip) {
+			return true
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.now().Before(s.clients[ip.Unmap()].grantUntil)
+	return s.now().Before(s.clients[ip].grantUntil)
 }
 
 // authorize holds one lock across validation and accounting so parallel failures cannot bypass the limit.
@@ -179,11 +184,11 @@ func (s *Server) authorize(ip netip.Addr, code string) int {
 		s.clients[ip] = state
 		return http.StatusUnauthorized
 	}
-	s.clients[ip] = clientState{grantUntil: now.Add(grantDuration)}
+	s.clients[ip] = clientState{grantUntil: now.Add(s.cfg.grantDuration)}
 	return http.StatusOK
 }
 
-const formPage = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FRP 访问授权</title><body><h1>FRP 访问授权</h1><p>输入动态验证码，允许当前 IP 在五分钟内建立连接。</p><form method="post" action="/knock"><input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required aria-label="动态验证码"><button type="submit">授权当前 IP</button></form></body></html>`
+const formPage = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FRP 访问授权</title><body><h1>FRP 访问授权</h1><p>输入动态验证码，允许当前 IP 在 %s 内建立连接。</p><form method="post" action="/knock"><input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required aria-label="动态验证码"><button type="submit">授权当前 IP</button></form></body></html>`
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -192,7 +197,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/", "/knock":
 		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = io.WriteString(w, formPage)
+			_, _ = fmt.Fprintf(w, formPage, s.cfg.grantDuration)
 			return
 		}
 		if r.URL.Path != "/knock" || r.Method != http.MethodPost {
@@ -228,7 +233,7 @@ func (s *Server) knock(w http.ResponseWriter, r *http.Request) {
 	switch status {
 	case http.StatusOK:
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = fmt.Fprintf(w, "验证成功，IP %s 已放行五分钟；已有连接不会在授权到期时断开。", ip)
+		_, _ = fmt.Fprintf(w, "验证成功，IP %s 已放行 %s；已有连接不会在授权到期时断开。", ip, s.cfg.grantDuration)
 	case http.StatusTooManyRequests:
 		w.Header().Set("Retry-After", "60")
 		http.Error(w, "too many attempts; retry later", status)
