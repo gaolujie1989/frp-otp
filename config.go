@@ -8,14 +8,21 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"strings"
+	"time"
 )
 
-// Config contains only the HTTP listener and the shared TOTP secret.
+// Config contains the listener, TOTP secret and visitor access policy.
 type Config struct {
-	BindAddress string `json:"BindAddress"`
-	Secret      string `json:"secret"`
+	BindAddress   string   `json:"BindAddress"`
+	Secret        string   `json:"secret"`
+	GrantDuration string   `json:"grant_duration"`
+	TrustNetworks []string `json:"trust_networks"`
+
+	grantDuration time.Duration
+	trustNetworks []netip.Prefix
 }
 
 func (c *Config) validate() error {
@@ -28,6 +35,31 @@ func (c *Config) validate() error {
 	secret, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(c.Secret)
 	if err != nil || len(secret) < 20 {
 		return errors.New("secret must be a base32 TOTP secret of at least 20 bytes; generate one with -e key")
+	}
+	if c.GrantDuration == "" {
+		c.GrantDuration = "4h"
+	}
+	duration, err := time.ParseDuration(c.GrantDuration)
+	if err != nil || duration <= 0 {
+		return errors.New("grant_duration must be a positive duration such as 4h or 30m")
+	}
+	c.grantDuration = duration
+	if c.TrustNetworks == nil {
+		c.TrustNetworks = []string{"10.0.0.0/8", "192.168.0.0/16"}
+	}
+	c.trustNetworks = make([]netip.Prefix, 0, len(c.TrustNetworks))
+	for _, network := range c.TrustNetworks {
+		prefix, err := netip.ParsePrefix(network)
+		if err != nil {
+			return fmt.Errorf("invalid trust_networks CIDR %q: %w", network, err)
+		}
+		if prefix.Addr().Is4In6() {
+			if prefix.Bits() < 96 {
+				return fmt.Errorf("invalid trust_networks CIDR %q: mapped IPv4 prefix must be at least /96", network)
+			}
+			prefix = netip.PrefixFrom(prefix.Addr().Unmap(), prefix.Bits()-96)
+		}
+		c.trustNetworks = append(c.trustNetworks, prefix.Masked())
 	}
 	return nil
 }

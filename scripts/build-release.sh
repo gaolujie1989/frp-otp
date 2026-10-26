@@ -31,7 +31,7 @@ for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 d
   cp README.md LICENSE CHANGELOG.md "$package/"
   cp examples/frps.toml "$package/examples/"
   # Never include a maintainer's local OTP secret in a release package.
-  printf '{\n  "BindAddress": "127.0.0.1:9000",\n  "secret": ""\n}\n' > "$package/frp.otp.json"
+  printf '{\n  "BindAddress": "127.0.0.1:9000",\n  "secret": "",\n  "grant_duration": "4h",\n  "trust_networks": ["10.0.0.0/8", "192.168.0.0/16"]\n}\n' > "$package/frp.otp.json"
   if [ "$os" = windows ]; then
     (cd "$stage" && zip -qr "$out/$name.zip" "$name")
   else

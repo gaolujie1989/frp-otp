@@ -1,4 +1,6 @@
 {
   "BindAddress": "0.0.0.0:9000",
-  "secret": ""
+  "secret": "",
+  "grant_duration": "4h",
+  "trust_networks": ["10.0.0.0/8", "192.168.0.0/16"]
 }

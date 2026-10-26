@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Make OTP grant duration configurable via `grant_duration`, defaulting to four hours.
+- Add configurable `trust_networks` visitor CIDRs; default to 10.0.0.0/8 and 192.168.0.0/16, with an empty list disabling bypass.
+- Validate access policy configuration and show the configured duration in the authorization UI.
+
 ## v0.1.0 - 2026-10-25
 
 - Replace channel policies with a single five-minute global IP allowlist; deny visitors by default.

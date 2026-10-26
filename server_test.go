@@ -224,39 +224,57 @@ func TestGrantExpiresAndCleanupRetainsActiveClients(t *testing.T) {
 
 func TestTrustDefaultsAndOverrides(t *testing.T) {
 	for _, tc := range []struct {
-		name, extra string
+		name, extra       string
 		allowed, rejected []string
 	}{
 		{"defaults", "", []string{"10.0.0.0:1", "10.255.255.255:1", "192.168.0.0:1", "192.168.255.255:1", "[::ffff:10.1.2.3]:1"}, []string{"9.255.255.255:1", "11.0.0.0:1", "192.167.255.255:1", "192.169.0.0:1", "172.16.0.1:1", "127.0.0.1:1", "[fd00::1]:1", "198.51.100.1:1"}},
-		{"disabled", `,"trust":[]`, nil, []string{"10.1.2.3:1", "192.168.1.2:1"}},
-		{"custom", `,"trust":["172.20.0.0/16","fd12:3456::/32"]`, []string{"172.20.1.2:1", "[fd12:3456::1]:1"}, []string{"172.21.1.2:1", "10.1.2.3:1", "192.168.1.2:1", "[fd12:3457::1]:1"}},
+		{"disabled", `,"trust_networks":[]`, nil, []string{"10.1.2.3:1", "192.168.1.2:1"}},
+		{"null defaults", `,"trust_networks":null`, []string{"10.1.2.3:1", "192.168.1.2:1"}, []string{"172.20.1.2:1"}},
+		{"mapped CIDR", `,"trust_networks":["::ffff:10.0.0.0/104"]`, []string{"10.1.2.3:1", "[::ffff:10.1.2.3]:1"}, []string{"192.168.1.2:1"}},
+		{"custom", `,"trust_networks":["172.20.0.0/16","fd12:3456::/32"]`, []string{"172.20.1.2:1", "[fd12:3456::1]:1"}, []string{"172.21.1.2:1", "10.1.2.3:1", "192.168.1.2:1", "[fd12:3457::1]:1"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, err := NewServer(loadTestConfig(t, tc.extra))
-			if err != nil { t.Fatal(err) }
+			if err != nil {
+				t.Fatal(err)
+			}
 			for _, ip := range tc.allowed {
-				if denied(t, s, ip) { t.Errorf("trusted visitor %s rejected", ip) }
+				if denied(t, s, ip) {
+					t.Errorf("trusted visitor %s rejected", ip)
+				}
 			}
 			for _, ip := range tc.rejected {
-				if !denied(t, s, ip) { t.Errorf("untrusted visitor %s allowed", ip) }
+				if !denied(t, s, ip) {
+					t.Errorf("untrusted visitor %s allowed", ip)
+				}
 			}
 		})
 	}
 }
 
 func TestConfiguredGrantDurationAndUI(t *testing.T) {
-	s, err := NewServer(loadTestConfig(t, `,"grant_duration":"90m","trust":[]`))
-	if err != nil { t.Fatal(err) }
+	s, err := NewServer(loadTestConfig(t, `,"grant_duration":"90m","trust_networks":[]`))
+	if err != nil {
+		t.Fatal(err)
+	}
 	now := time.Now()
 	s.now = func() time.Time { return now }
 	form := perform(s, "GET", "/", "198.51.100.10:1", "", "")
-	if !strings.Contains(form.Body.String(), "1h30m0s") { t.Fatal("form does not show configured duration") }
+	if !strings.Contains(form.Body.String(), "1h30m0s") {
+		t.Fatal("form does not show configured duration")
+	}
 	w := perform(s, "POST", "/knock", "198.51.100.10:1", "", validCode(t))
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "1h30m0s") { t.Fatalf("grant response: %d %s", w.Code, w.Body.String()) }
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "1h30m0s") {
+		t.Fatalf("grant response: %d %s", w.Code, w.Body.String())
+	}
 	now = now.Add(90*time.Minute - time.Nanosecond)
-	if denied(t, s, "198.51.100.10:1") { t.Fatal("configured grant expired early") }
+	if denied(t, s, "198.51.100.10:1") {
+		t.Fatal("configured grant expired early")
+	}
 	now = now.Add(time.Nanosecond)
-	if !denied(t, s, "198.51.100.10:1") { t.Fatal("configured grant did not expire") }
+	if !denied(t, s, "198.51.100.10:1") {
+		t.Fatal("configured grant did not expire")
+	}
 }
 
 func TestGrantWorksAcrossProxyNames(t *testing.T) {

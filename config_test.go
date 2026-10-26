@@ -61,8 +61,9 @@ func TestInvalidAccessPoliciesRejected(t *testing.T) {
 	for _, extra := range []string{
 		`,"grant_duration":"0s"`, `,"grant_duration":"-1h"`,
 		`,"grant_duration":"tomorrow"`, `,"grant_duration":"999999999h"`,
-		`,"trust":["10.0/8"]`, `,"trust":["not-a-network"]`,
-		`,"trust":["192.168.0.0/33"]`,
+		`,"trust_networks":["10.0/8"]`, `,"trust_networks":["not-a-network"]`,
+		`,"trust_networks":["192.168.0.0/33"]`,
+		`,"trust_networks":["::ffff:10.0.0.0/80"]`,
 	} {
 		t.Run(extra, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.json")
