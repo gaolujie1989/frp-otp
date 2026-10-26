@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.1.1 - 2026-10-26
 
 - Make OTP grant duration configurable via `grant_duration`, defaulting to four hours.
 - Add configurable `trust_networks` visitor CIDRs; default to 10.0.0.0/8 and 192.168.0.0/16, with an empty list disabling bypass.

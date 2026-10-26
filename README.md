@@ -88,8 +88,8 @@ WAF/反代应覆盖或按标准追加真实连接来源地址，并限制回源�
 已提供 GHCR 镜像（Linux amd64/arm64），可使用固定版本或 latest：
 
 ```bash
-docker pull ghcr.io/gaolujie1989/frp-otp:v0.1.0
-docker run --rm ghcr.io/gaolujie1989/frp-otp:v0.1.0 -v
+docker pull ghcr.io/gaolujie1989/frp-otp:v0.1.1
+docker run --rm ghcr.io/gaolujie1989/frp-otp:v0.1.1 -v
 ```
 
 填好配置后启动：
@@ -98,7 +98,7 @@ docker run --rm ghcr.io/gaolujie1989/frp-otp:v0.1.0 -v
 docker run -d --name frp-otp --restart unless-stopped \
   -p 127.0.0.1:9000:9000 \
   -v "$(pwd)/frp.otp.json:/etc/frp-otp.json:ro" \
-  ghcr.io/gaolujie1989/frp-otp:v0.1.0
+  ghcr.io/gaolujie1989/frp-otp:v0.1.1
 ```
 
 配置中的 BindAddress 需为 `0.0.0.0:9000`，密钥需先生成。配置文件需要能被容器 UID 65532 读取。镜像的版本标签对应同名 Git tag 的源代码，latest 指向最近发布的版本。
