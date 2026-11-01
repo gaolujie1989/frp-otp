@@ -127,7 +127,10 @@ docker compose run --rm frp-otp -e key
 ```bash
 make test
 make vet
+node --test scripts/page.test.cjs
 ```
+
+剪贴板行为测试需要 Node.js 18 或更新版本。授权页的“读取剪贴板”仅填入 6 位数字，不自动提交；浏览器通常要求 HTTPS 或 localhost，读取失败时仍可手动输入或粘贴。提交结果显示在表单上方，成功和失败均保留表单。
 
 本项目 fork 自 [csg2008/frp-otp](https://github.com/csg2008/frp-otp)，保留 Apache-2.0 许可证。
 
