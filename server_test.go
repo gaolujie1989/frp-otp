@@ -339,3 +339,52 @@ func TestAuthorizationStateBounded(t *testing.T) {
 		t.Fatal("state capacity exceeded")
 	}
 }
+
+func TestKnockResponsesKeepForm(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, peer, body string
+		failures, status         int
+	}{
+		{"initial page", "GET", "198.51.100.10:1", "", 0, 200},
+		{"success", "POST", "198.51.100.10:1", validCode(t), 0, 200},
+		{"invalid code", "POST", "198.51.100.10:1", "code=invalid", 0, 401},
+		{"rate limited", "POST", "198.51.100.10:1", validCode(t), 5, 429},
+		{"invalid client", "POST", "invalid", "code=123456", 0, 400},
+		{"malformed form", "POST", "198.51.100.10:1", "code=%zz", 0, 400},
+		{"oversized form", "POST", "198.51.100.10:1", "code=" + strings.Repeat("1", maxBodyBytes), 0, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testServer(t)
+			for i := 0; i < tc.failures; i++ {
+				perform(s, "POST", "/knock", tc.peer, "", "code=invalid")
+			}
+			w := perform(s, tc.method, "/knock", tc.peer, "", tc.body)
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d", w.Code, tc.status)
+			}
+			if !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
+				t.Fatalf("expected HTML page, got %q", w.Header().Get("Content-Type"))
+			}
+			body := w.Body.String()
+			statusIndex, formIndex := strings.Index(body, `id="status"`), strings.Index(body, `<form`)
+			if statusIndex < 0 || formIndex < statusIndex || !strings.Contains(body, `action="/knock"`) || !strings.Contains(body, `name="code"`) {
+				t.Fatal("expected a result region followed by a usable OTP form")
+			}
+			if tc.method == "POST" {
+				kind := "error"
+				if tc.status == 200 {
+					kind = "success"
+				}
+				if !strings.Contains(body, `data-kind="`+kind+`"`) {
+					t.Fatalf("missing %s result", kind)
+				}
+			}
+			if tc.status == 429 && w.Header().Get("Retry-After") != "60" {
+				t.Fatal("rate limit retry header lost")
+			}
+			if tc.status >= 400 && !denied(t, s, "198.51.100.10:1") {
+				t.Fatal("failed submission granted access")
+			}
+		})
+	}
+}

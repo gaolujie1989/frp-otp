@@ -188,16 +188,13 @@ func (s *Server) authorize(ip netip.Addr, code string) int {
 	return http.StatusOK
 }
 
-const formPage = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FRP 访问授权</title><body><h1>FRP 访问授权</h1><p>输入动态验证码，允许当前 IP 在 %s 内建立连接。</p><form method="post" action="/knock"><input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required aria-label="动态验证码"><button type="submit">授权当前 IP</button></form></body></html>`
-
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	switch r.URL.Path {
 	case "/", "/knock":
 		if r.Method == http.MethodGet {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = fmt.Fprintf(w, formPage, s.cfg.grantDuration)
+			s.renderForm(w, http.StatusOK, "")
 			return
 		}
 		if r.URL.Path != "/knock" || r.Method != http.MethodPost {
@@ -221,24 +218,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) knock(w http.ResponseWriter, r *http.Request) {
 	ip, err := clientIP(r)
 	if err != nil {
-		http.Error(w, "invalid client IP", 400)
+		s.renderForm(w, http.StatusBadRequest, "无法识别当前 IP，请检查代理配置后重试。")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", 400)
+		s.renderForm(w, http.StatusBadRequest, "提交内容无效，请重新输入 6 位动态验证码。")
 		return
 	}
 	status := s.authorize(ip, r.PostForm.Get("code"))
 	switch status {
 	case http.StatusOK:
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = fmt.Fprintf(w, "验证成功，IP %s 已放行 %s；已有连接不会在授权到期时断开。", ip, s.cfg.grantDuration)
+		s.renderForm(w, status, fmt.Sprintf("验证成功，IP %s 已放行 %s；已有连接不会在授权到期时断开。", ip, s.cfg.grantDuration))
 	case http.StatusTooManyRequests:
 		w.Header().Set("Retry-After", "60")
-		http.Error(w, "too many attempts; retry later", status)
+		s.renderForm(w, status, "尝试次数过多，请等待 60 秒后重试。")
 	default:
-		http.Error(w, "invalid authorization code", status)
+		s.renderForm(w, status, "验证码错误或已过期，请重新输入。")
 	}
 }
 
