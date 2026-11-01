@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.2 - 2026-11-01
+
+- Enlarge OTP inputs and buttons with a responsive layout for mobile use.
+- Add a clipboard button that accepts only six digits, preserves leading zeros, and reports invalid content or unavailable access.
+- Keep the authorization form visible after submission and display success or failure above it.
+- Add clipboard behavior and HTML response regression tests.
+
 ## v0.1.1 - 2026-10-26
 
 - Make OTP grant duration configurable via `grant_duration`, defaulting to four hours.
